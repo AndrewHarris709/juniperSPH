@@ -51,7 +51,10 @@ SimData::SimData(const std::string& filename) {
                 xyzh.push_back(std::stof(cell));
             }
             if (std::ranges::find(velCols, column) != std::end(velCols)) {
-                vxyzv.push_back(std::stof(cell));
+                if (column == "u") {
+                    containsEnergy = true;
+                }
+                vxyzu.push_back(std::stof(cell));
             }
             if (std::ranges::find(varCols, column) != std::end(varCols)) {
                 fxyz.push_back(std::stof(cell));
@@ -72,11 +75,11 @@ void SimData::toCSV(const std::string &filename) {
         std::cerr << "Error writing to file " << filename << std::endl;
     }
 
-    file << "x,y,z,h,vx,vy,vz,fx,fy,fz" << std::endl;
+    file << "x,y,z,h,vx,vy,vz,u,fx,fy,fz" << std::endl;
 
     for (int i = 0; i < getParticleCount(); i++) {
         file << xyzh[4*i] << "," << xyzh[4*i+1] << "," << xyzh[4*i+2] << "," << xyzh[4*i+3] << ",";
-        file << vxyzv[3*i] << "," << vxyzv[3*i+1] << "," << vxyzv[3*i+2] << ",";
+        file << vxyzu[4*i] << "," << vxyzu[4*i+1] << "," << vxyzu[4*i+2] << "," << vxyzu[4*i+3] << ",";
         file << fxyz[3*i] << "," << fxyz[3*i+1] << "," << fxyz[3*i+2];
         file << std::endl;
     }
@@ -87,3 +90,8 @@ void SimData::toCSV(const std::string &filename) {
 int SimData::getParticleCount() const {
     return std::floor(xyzh.size() / 4);
 }
+
+bool SimData::doesContainEnergy() const {
+    return this->containsEnergy;
+}
+
