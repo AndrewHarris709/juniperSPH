@@ -15,6 +15,10 @@ int main(int argc, char* argv[])
 
     std::cout << "Density iteration complete" << std::endl;
 
+    data.stepSimulation();
+
+    std::cout << "Simulation Step Complete" << std::endl;
+
     // This argument should be verified prior to simulation.
     data.getSimData().toCSV(argv[3]);
 

@@ -13,15 +13,24 @@
 #include <limits>
 #include <stack>
 
+#include "LeapfrogIntegrator.h"
+
 constexpr int NODE_PARTICLE_MIN = 10;
 constexpr int MAX_DENSITY_ITERATIONS = 400;
 
-Simulation::Simulation(const std::string& filename) : simData(filename), globalSet(simData), baseNode(nullptr, globalSet)  {
+Simulation::Simulation(const std::string& filename) : simData(filename), globalSet(simData),
+                                                      baseNode(nullptr, globalSet) {
     // Do not set limits if data is not supplied, like in unit tests.
-    if (filename == "") {
+    if (filename.empty()) {
         return;
     }
     this->setLimits();
+
+    integrator = new LeapfrogIntegrator();
+}
+
+Simulation::~Simulation() {
+    delete integrator;
 }
 
 void Simulation::useConfig(const std::string& filename) {
@@ -201,6 +210,12 @@ void Simulation::densityIterate() {
             simData.xyzh[i * 4 + 3] = findDensityForParticle(i, *leaf);
         }
     }
+}
+
+void Simulation::stepSimulation() {
+    std::vector<float> accs;
+    accs.assign(getParticleCount() * 3, 0);
+    integrator->step(this->simData, accs, 1);
 }
 
 void Simulation::setLimits() {

@@ -1,6 +1,7 @@
 #include <vector>
 #include <string>
 
+#include "Integrator.h"
 #include "kernel.h"
 #include "SimData.h"
 #include "TreeNode.h"
@@ -15,6 +16,7 @@ class Simulation {
     ParticleSet globalSet;
     TreeNode baseNode;
     Kernel kernel;
+    Integrator* integrator;
     std::vector<TreeNode*> leaves;
 
     float distBetween(float x1, float x2, float y1, float y2, float z1, float z2) const;
@@ -23,10 +25,12 @@ class Simulation {
 public:
     explicit Simulation(const std::string& filename);
     explicit Simulation() : Simulation("") {};
+    ~Simulation();
 
     float xmin, xmax, ymin, ymax, zmin, zmax;
 
     void useConfig(const std::string& filename);
+    void stepSimulation();
 
     float distBetween(int part1, int part2) const;
     float distBetweenNodes(TreeNode& node1, TreeNode& node2) const;

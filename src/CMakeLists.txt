@@ -12,6 +12,9 @@ add_library(juniperSRC STATIC kernel.cpp
         TreeNode.h
         SimData.cpp
         SimData.h
+        Integrator.h
+        LeapfrogIntegrator.cpp
+        LeapfrogIntegrator.h
 )
 
 find_package(OpenMP)

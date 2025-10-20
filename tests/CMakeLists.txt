@@ -18,6 +18,7 @@ file(COPY ./files/test.csv DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/files)
 file(COPY ./files/hydro32_00020.csv DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/files)
 file(COPY ./files/kd_test.csv DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/files)
 file(COPY ./files/hydro32.toml DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/files)
+file(COPY ./files/test_integrate.csv DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/files)
 
 # Create a test for the kernel.cpp module:
 add_executable(KernelTest test_kernel.cpp) # First create an initial executable from the test case code.
