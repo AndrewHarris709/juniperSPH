@@ -20,13 +20,13 @@ constexpr int MAX_DENSITY_ITERATIONS = 400;
 
 Simulation::Simulation(const std::string& filename) : simData(filename), globalSet(simData),
                                                       baseNode(nullptr, globalSet) {
+    integrator = new LeapfrogIntegrator();
+
     // Do not set limits if data is not supplied, like in unit tests.
     if (filename.empty()) {
         return;
     }
     this->setLimits();
-
-    integrator = new LeapfrogIntegrator();
 }
 
 Simulation::~Simulation() {
