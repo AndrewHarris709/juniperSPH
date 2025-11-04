@@ -10,7 +10,7 @@
 class Integrator {
 public:
     virtual ~Integrator() = default;
-    virtual void step(SimData& data, std::vector<float> accs, float timestep) = 0;
+    virtual void step(SimData& data, float timestep) = 0;
 };
 
 

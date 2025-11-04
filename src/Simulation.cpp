@@ -17,10 +17,11 @@
 
 constexpr int NODE_PARTICLE_MIN = 10;
 constexpr int MAX_DENSITY_ITERATIONS = 400;
+constexpr float GAMMA = 5.0 / 3;
 
 Simulation::Simulation(const std::string& filename) : simData(filename), globalSet(simData),
                                                       baseNode(nullptr, globalSet) {
-    integrator = new LeapfrogIntegrator();
+    integrator = new LeapfrogIntegrator(*this);
 
     // Do not set limits if data is not supplied, like in unit tests.
     if (filename.empty()) {
@@ -67,7 +68,11 @@ void Simulation::buildTree() {
     }
 }
 
-std::vector<int> Simulation::getNeighboursByTree(int target, TreeNode& targetNode) {
+std::vector<int> Simulation::getNeighbours(int target, TreeNode& targetNode, bool isCache) {
+    if (neighbourCache.contains(target) && isCache) {
+        return neighbourCache[target];
+    }
+
     std::vector<int> neighbours;
     std::stack<TreeNode*> nodeStack;
     nodeStack.push(&this->baseNode);
@@ -77,16 +82,12 @@ std::vector<int> Simulation::getNeighboursByTree(int target, TreeNode& targetNod
         nodeStack.pop();
 
         float distance = distBetweenNodes(*nextNode, targetNode);
-        float targetBounds = nextNode->size + targetNode.size + (kernel.getRadius() * std::max(targetNode.hmax, nextNode->hmax));
+        float targetBounds = nextNode->size + targetNode.size + (kernel.getRadius() * targetNode.hmax);
 
         if (distance * distance < targetBounds * targetBounds) {
             if (nextNode->isLeaf()) {
                 for (int candidate : nextNode->getParticleIndices()) {
-                    float dist = distBetween(target, candidate);
-                    float targetH = this->getSimData().xyzh[target * 4 + 3];
-                    if (dist <= targetH * kernel.getRadius()) {
-                        neighbours.push_back(candidate);
-                    }
+                    neighbours.push_back(candidate);
                 }
             } else {
                 nodeStack.push(nextNode->getLeftChild().get());
@@ -95,22 +96,38 @@ std::vector<int> Simulation::getNeighboursByTree(int target, TreeNode& targetNod
         }
     }
 
+    if (isCache)
+        for (int part: targetNode.getParticleIndices())
+            neighbourCache.insert(std::make_pair(part, neighbours));
+
     return neighbours;
 }
 
-std::vector<int> Simulation::getNeighbours(int part) {
-    // Naive strategy for neighbour finding, will replace with kd-tree
-    float tarH = simData.xyzh[4 * part+3];
-    std::vector<int> neighbours;
+void Simulation::resetNeighbourCache() {
+    neighbourCache.clear();
+}
 
-    for (int i = 0; i < this->getParticleCount(); i++) {
-        float dist = distBetween(part, i);
-        if (kernel.valueAt(dist / tarH) > 0) {
-            neighbours.push_back(i);
+std::vector<int> Simulation::getNeighbours(int part) {
+    std::stack<TreeNode*> nodeStack;
+    nodeStack.push(&this->baseNode);
+
+    while (!nodeStack.empty()) {
+        TreeNode* nextNode = nodeStack.top();
+        nodeStack.pop();
+        if (!nextNode->isLeaf()) {
+            nodeStack.push(nextNode->getLeftChild().get());
+            nodeStack.push(nextNode->getRightChild().get());
+            continue;
+        }
+
+        std::vector<int> indices = nextNode->getParticleIndices();
+        if (std::find(indices.begin(), indices.end(), part) != indices.end()) {
+            return getNeighbours(part, *nextNode, false);
         }
     }
 
-    return neighbours;
+    std::cout << "Particle " << part << " not found!" << std::endl;
+    return {};
 }
 
 float Simulation::distBetween(float x1, float x2, float y1, float y2, float z1, float z2) const {
@@ -146,8 +163,8 @@ float Simulation::distBetweenNodes(TreeNode& node1, TreeNode& node2) const {
     return distBetween(x1, x2, y1, y2, z1, z2);
 }
 
-float Simulation::densityAt(int part) {
-    std::vector<int> neighbours = getNeighbours(part);
+float Simulation::densityAt(int part, TreeNode& node) {
+    std::vector<int> neighbours = getNeighbours(part, node, true);
 
     float density = 0.0;
     for (int i : neighbours) {
@@ -159,13 +176,35 @@ float Simulation::densityAt(int part) {
     return density;
 }
 
-float Simulation::findDensityForParticle(int particle, TreeNode& node) {
+float Simulation::pressureAt(int part, TreeNode& node) {
+    if (!simData.doesContainEnergy()) {
+        std::cout << ("No energy found, returning 0!") << std::endl;
+        return 0;
+    }
+
+    return (GAMMA - 1) * densityAt(part, node) * simData.vxyzu[4 * part + 3];
+}
+
+float Simulation::omegaAt(int part, TreeNode& node) {
+    float omega = 0;
+    float newH = simData.xyzh[part * 4 + 3];
+    float grad = -3 * (newH / densityAt(part, node));
+
+    std::vector<int> neighbours = getNeighbours(part, node, true);
+    for (int neighbour : neighbours) {
+        omega += simData.m * kernel.dWdhAt(distBetween(part, neighbour) / newH);
+    }
+
+    return 1 - grad * omega / (newH * newH * newH * newH);
+}
+
+float Simulation::densityIterationForParticle(int particle, TreeNode& node) {
     float oldH = std::numeric_limits<float>::max();
     float newH = simData.xyzh[particle * 4 + 3];
     int iterationCount = 0;
 
     while (std::abs(newH - oldH) / simData.xyzh[particle * 4 + 3] > 10e-4) {
-        std::vector<int> neighbours = getNeighboursByTree(particle, node);
+        std::vector<int> neighbours = getNeighbours(particle, node, false);
 
         float hfact = 1.2;
         float density = simData.m * (hfact / newH) * (hfact / newH) * (hfact / newH);
@@ -195,7 +234,18 @@ float Simulation::findDensityForParticle(int particle, TreeNode& node) {
         }
     }
     return newH;
+}
 
+Point3f Simulation::velocityDiffBetween(int target, int part) {
+    return {simData.vxyzu[4 * target + 0] - simData.vxyzu[4 * part + 0],
+                simData.vxyzu[4 * target + 1] - simData.vxyzu[4 * part + 1],
+                simData.vxyzu[4 * target + 2] - simData.vxyzu[4 * part + 2]};
+}
+
+Point3f Simulation::displacementBetween(int target, int part) {
+    return {simData.xyzh[4 * target + 0] - simData.xyzh[4 * part + 0],
+                simData.xyzh[4 * target + 1] - simData.xyzh[4 * part + 1],
+                simData.xyzh[4 * target + 2] - simData.xyzh[4 * part + 2]};
 }
 
 void Simulation::densityIterate() {
@@ -207,15 +257,13 @@ void Simulation::densityIterate() {
         TreeNode* leaf = leaves[leafIdx];
         auto indices = leaf->getParticleIndices();
         for (int i: indices) {
-            simData.xyzh[i * 4 + 3] = findDensityForParticle(i, *leaf);
+            simData.xyzh[i * 4 + 3] = densityIterationForParticle(i, *leaf);
         }
     }
 }
 
 void Simulation::stepSimulation() {
-    std::vector<float> accs;
-    accs.assign(getParticleCount() * 3, 0);
-    integrator->step(this->simData, accs, 1);
+    integrator->step(this->simData, 2e-3);
 }
 
 void Simulation::setLimits() {
@@ -258,4 +306,8 @@ TreeNode& Simulation::getBaseNode() {
 
 Kernel& Simulation::getKernel() {
     return this->kernel;
+}
+
+std::vector<TreeNode*>& Simulation::getLeaves() {
+    return this->leaves;
 }

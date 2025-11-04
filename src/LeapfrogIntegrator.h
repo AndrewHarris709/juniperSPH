@@ -5,10 +5,18 @@
 #ifndef JUNIPEREXE_LEAPFROGINTEGRATOR_H
 #define JUNIPEREXE_LEAPFROGINTEGRATOR_H
 #include "Integrator.h"
-
+#include "Simulation.h"
 
 class LeapfrogIntegrator : public Integrator {
-    void step(SimData& data, std::vector<float> accs, float timestep) override;
+
+    Simulation &sim;
+
+    Point3f accForParticle(int particle, TreeNode& leaf);
+    float energyChangeForParticle(int particle, TreeNode& leaf);
+    void step(SimData& data, float timestep) override;
+
+public:
+    explicit LeapfrogIntegrator(Simulation& sim);
 };
 
 

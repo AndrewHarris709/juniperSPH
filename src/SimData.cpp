@@ -80,7 +80,9 @@ void SimData::toCSV(const std::string &filename) {
     for (int i = 0; i < getParticleCount(); i++) {
         file << xyzh[4*i] << "," << xyzh[4*i+1] << "," << xyzh[4*i+2] << "," << xyzh[4*i+3] << ",";
         file << vxyzu[4*i] << "," << vxyzu[4*i+1] << "," << vxyzu[4*i+2] << "," << vxyzu[4*i+3] << ",";
-        file << fxyz[3*i] << "," << fxyz[3*i+1] << "," << fxyz[3*i+2];
+        if (fxyz.size() > 0) {
+            file << fxyz[3*i] << "," << fxyz[3*i+1] << "," << fxyz[3*i+2];
+        }
         file << std::endl;
     }
 

@@ -25,9 +25,10 @@ TEST(DensityTest, SimpleDensityTest) {
     }
 
     sim.setLimits(0, L, 0, L, 0, L);
-
-    for (int part = 0; part < parts1d * parts1d * parts1d; part++) {
-        ASSERT_FLOAT_EQ(sim.densityAt(part), 0.02546479089);
+    for (TreeNode* leaf : sim.getLeaves()) {
+        for (const int part : leaf->getParticleIndices()) {
+            ASSERT_FLOAT_EQ(sim.densityAt(part, *leaf), 0.02546479089);
+        }
     }
 }
 
@@ -67,5 +68,5 @@ TEST(DensityTest, PeriodicBoundariesTest) {
     }
     sim.setLimits(0, 1, 0, 0, 0, 0);
 
-    ASSERT_NE(sim.densityAt(0), sim.getKernel().valueAt(0));
+    ASSERT_NE(sim.densityAt(0, sim.getBaseNode()), sim.getKernel().valueAt(0));
 }

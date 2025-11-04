@@ -1,5 +1,6 @@
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 #include "Integrator.h"
 #include "kernel.h"
@@ -18,9 +19,10 @@ class Simulation {
     Kernel kernel;
     Integrator* integrator;
     std::vector<TreeNode*> leaves;
+    std::unordered_map<int, std::vector<int>> neighbourCache;
 
     float distBetween(float x1, float x2, float y1, float y2, float z1, float z2) const;
-    float findDensityForParticle(int particle, TreeNode& node);
+    float densityIterationForParticle(int particle, TreeNode& node);
 
 public:
     explicit Simulation(const std::string& filename);
@@ -36,8 +38,15 @@ public:
     float distBetweenNodes(TreeNode& node1, TreeNode& node2) const;
     void densityIterate();
     std::vector<int> getNeighbours(int part);
-    std::vector<int> getNeighboursByTree(int target, TreeNode& node);
-    float densityAt(int part);
+    std::vector<int> getNeighbours(int target, TreeNode& node, bool isCache);
+    void resetNeighbourCache();
+
+    float densityAt(int part, TreeNode& node);
+    float pressureAt(int part, TreeNode& node);
+    float omegaAt(int part, TreeNode& node);
+    Point3f velocityDiffBetween(int target, int part);
+    Point3f displacementBetween(int target, int part);
+
     void setLimits();
     void setLimits(float xmin, float xmax, float ymin, float ymax, float zmin, float zmax);
     int getParticleCount() const;
@@ -46,6 +55,7 @@ public:
     TreeNode& getBaseNode();
     void buildTree();
     Kernel& getKernel();
+    std::vector<TreeNode*>& getLeaves();
 };
 
 #endif //SIMULATION_H
