@@ -311,3 +311,34 @@ Kernel& Simulation::getKernel() {
 std::vector<TreeNode*>& Simulation::getLeaves() {
     return this->leaves;
 }
+
+float Simulation::qabAt(const int partA, const int partB, TreeNode& nodeA) {
+    const Point3f velocityDiff = velocityDiffBetween(partA, partB);
+    const Point3f displacement = displacementBetween(partA, partB);
+    const Point3f dispNorm = norm(displacement);
+
+    const float losDot = dot(velocityDiff, dispNorm);
+    if (losDot >= 0) {
+        return 0;
+    }
+
+    const float densityA = densityAt(partA, nodeA);
+    const float pressureA = pressureAt(partA, nodeA);
+    const float soundSpeed = sqrt(GAMMA * pressureA / densityA);
+    const float signalSpeed = 1 * soundSpeed + 2 * abs(losDot);
+
+    return -0.5 * pressureA * signalSpeed * losDot;
+}
+
+Point3f Simulation::norm(const Point3f p) {
+    const float mag = sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+
+    if (mag <= 0) {
+        return Point3f(0, 0, 0);
+    }
+    return {p.x / mag, p.y / mag, p.z / mag};
+}
+
+float Simulation::dot(const Point3f p1, const Point3f p2) {
+    return p1.x * p2.x + p1.y * p2.y + p1.z * p2.z;
+}

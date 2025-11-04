@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -56,6 +57,11 @@ public:
     void buildTree();
     Kernel& getKernel();
     std::vector<TreeNode*>& getLeaves();
+
+    // for artificial viscosity
+    float qabAt(int partA, int partB, TreeNode& nodeA);
+    static Point3f norm(Point3f p);
+    static float dot(Point3f p1, Point3f p2);
 };
 
 #endif //SIMULATION_H

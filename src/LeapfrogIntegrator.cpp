@@ -23,11 +23,13 @@ Point3f LeapfrogIntegrator::accForParticle(int target, TreeNode& leaf) {
     for (int part: leaf.getParticleIndices()) {
         float targetDensity = sim.densityAt(target, leaf);
         float targetOmega = sim.omegaAt(target, leaf);
-        float targetRatio = sim.pressureAt(target, leaf) / (targetDensity * targetDensity * targetOmega);
+        float targetQAB = sim.qabAt(target, part, leaf);
+        float targetRatio = (sim.pressureAt(target, leaf) + targetQAB) / (targetDensity * targetDensity * targetOmega);
 
         float partDensity = sim.densityAt(part, leaf);
         float partOmega = sim.omegaAt(target, leaf);
-        float partRatio = sim.pressureAt(part, leaf) / (partDensity * partDensity);
+        float partQAB = sim.qabAt(part, target, leaf);
+        float partRatio = (sim.pressureAt(part, leaf) + partQAB) / (partDensity * partDensity * partOmega);
 
         Point3f disp = sim.displacementBetween(target, part);
         float hTarget = data.xyzh[4 * target + 3], hPart = data.xyzh[4 * part + 3];
