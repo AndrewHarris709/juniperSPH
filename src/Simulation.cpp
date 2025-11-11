@@ -82,7 +82,7 @@ std::vector<int> Simulation::getNeighbours(int target, TreeNode& targetNode, boo
         nodeStack.pop();
 
         float distance = distBetweenNodes(*nextNode, targetNode);
-        float targetBounds = nextNode->size + targetNode.size + (kernel.getRadius() * targetNode.hmax);
+        float targetBounds = nextNode->size + targetNode.size + (kernel.getRadius() * std::max(targetNode.hmax, nextNode->hmax));
 
         if (distance * distance < targetBounds * targetBounds) {
             if (nextNode->isLeaf()) {
@@ -130,7 +130,7 @@ std::vector<int> Simulation::getNeighbours(int part) {
     return {};
 }
 
-float Simulation::distBetween(float x1, float x2, float y1, float y2, float z1, float z2) const {
+Point3f Simulation::displacementBetween(float x1, float x2, float y1, float y2, float z1, float z2) const {
     float dx = std::abs(x1 - x2);
     float dy = std::abs(y1 - y2);
     float dz = std::abs(z1 - z2);
@@ -145,7 +145,13 @@ float Simulation::distBetween(float x1, float x2, float y1, float y2, float z1, 
         dz = (this->zmax - this->zmin) - dz;
     }
 
-    return std::sqrt(dx * dx + dy * dy + dz * dz);
+    return {dx, dy, dz};
+}
+
+float Simulation::distBetween(float x1, float x2, float y1, float y2, float z1, float z2) const {
+    Point3f disp = displacementBetween(x1, x2, y1, y2, z1, z2);
+
+    return std::sqrt(disp.x * disp.x + disp.y * disp.y + disp.z * disp.z);
 }
 
 
@@ -176,19 +182,19 @@ float Simulation::densityAt(int part, TreeNode& node) {
     return density;
 }
 
-float Simulation::pressureAt(int part, TreeNode& node) {
+float Simulation::pressureAt(int part) {
     if (!simData.doesContainEnergy()) {
         std::cout << ("No energy found, returning 0!") << std::endl;
         return 0;
     }
 
-    return (GAMMA - 1) * densityAt(part, node) * simData.vxyzu[4 * part + 3];
+    return (GAMMA - 1) * simData.density[part] * simData.vxyzu[4 * part + 3];
 }
 
 float Simulation::omegaAt(int part, TreeNode& node) {
     float omega = 0;
     float newH = simData.xyzh[part * 4 + 3];
-    float grad = -3 * (newH / densityAt(part, node));
+    float grad = -3 * (newH / simData.density[part]);
 
     std::vector<int> neighbours = getNeighbours(part, node, true);
     for (int neighbour : neighbours) {
@@ -243,9 +249,9 @@ Point3f Simulation::velocityDiffBetween(int target, int part) {
 }
 
 Point3f Simulation::displacementBetween(int target, int part) {
-    return {simData.xyzh[4 * target + 0] - simData.xyzh[4 * part + 0],
-                simData.xyzh[4 * target + 1] - simData.xyzh[4 * part + 1],
-                simData.xyzh[4 * target + 2] - simData.xyzh[4 * part + 2]};
+    return displacementBetween(simData.xyzh[4 * target + 0], simData.xyzh[4 * part + 0],
+                simData.xyzh[4 * target + 1], simData.xyzh[4 * part + 1],
+                simData.xyzh[4 * target + 2], simData.xyzh[4 * part + 2]);
 }
 
 void Simulation::densityIterate() {
@@ -312,7 +318,7 @@ std::vector<TreeNode*>& Simulation::getLeaves() {
     return this->leaves;
 }
 
-float Simulation::qabAt(const int partA, const int partB, TreeNode& nodeA) {
+float Simulation::qabAt(const int partA, const int partB) {
     const Point3f velocityDiff = velocityDiffBetween(partA, partB);
     const Point3f displacement = displacementBetween(partA, partB);
     const Point3f dispNorm = norm(displacement);
@@ -322,8 +328,8 @@ float Simulation::qabAt(const int partA, const int partB, TreeNode& nodeA) {
         return 0;
     }
 
-    const float densityA = densityAt(partA, nodeA);
-    const float pressureA = pressureAt(partA, nodeA);
+    const float densityA = simData.density[partA];
+    const float pressureA = pressureAt(partA);
     const float soundSpeed = sqrt(GAMMA * pressureA / densityA);
     const float signalSpeed = 1 * soundSpeed + 2 * abs(losDot);
 

@@ -25,6 +25,11 @@ public:
     std::vector<float> vxyzu;
     std::vector<float> fxyz;
 
+    std::vector<float> density;
+    std::vector<float> omega;
+    std::vector<float> accs;
+    std::vector<float> energies;
+
     int getParticleCount() const;
     bool doesContainEnergy() const;
 

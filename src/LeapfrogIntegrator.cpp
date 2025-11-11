@@ -10,7 +10,46 @@ void addToParticle(int particle, std::vector<float>& data1, int width1, float mu
     // Width here is for xyzh & vxyzu when u is present, to make sure that the particles are indexed correctly.
     // TODO: There should be a better way to link continguous data in vectors with width.
     for (int axis = 0; axis < 3; axis++) {
-        data1[particle * width1 + axis] += multiple * timestep * data2[particle * width2 * axis];
+        data1[particle * width1 + axis] += multiple * timestep * data2[particle * width2 + axis];
+    }
+}
+
+void LeapfrogIntegrator::periodicCorrection(int particle) {
+    SimData& data = sim.getSimData();
+
+    float x = data.xyzh[particle * 3 + 0], y = data.xyzh[particle * 3 + 1], z = data.xyzh[particle * 3 + 2];
+
+    if (x > sim.xmax) {
+        x -= (sim.xmax - sim.xmin);
+    } else if (x < sim.xmin) {
+        x += (sim.xmax - sim.xmin);
+    }
+
+    if (y > sim.ymax) {
+        y -= (sim.ymax - sim.ymin);
+    } else if (y < sim.ymin) {
+        y += (sim.ymax - sim.ymin);
+    }
+
+    if (z > sim.zmax) {
+        z -= (sim.zmax - sim.zmin);
+    } else if (z < sim.zmin) {
+        z += (sim.zmax - sim.zmin);
+    }
+
+    data.xyzh[particle * 3 + 0] = x;
+    data.xyzh[particle * 3 + 1] = y;
+    data.xyzh[particle * 3 + 2] = z;
+}
+
+void LeapfrogIntegrator::precompute() {
+    SimData& simData = sim.getSimData();
+
+    for (TreeNode* node : sim.getLeaves()) {
+        for (int part: node->getParticleIndices()) {
+            simData.density[part] = sim.densityAt(part, *node);
+            simData.omega[part] = sim.omegaAt(part, *node);
+        }
     }
 }
 
@@ -19,24 +58,30 @@ Point3f LeapfrogIntegrator::accForParticle(int target, TreeNode& leaf) {
     SimData& data = sim.getSimData();
     Kernel& kernel = sim.getKernel();
 
-    std::vector<int> neighbours = sim.getNeighbours(target, leaf, true);
-    for (int part: leaf.getParticleIndices()) {
-        float targetDensity = sim.densityAt(target, leaf);
-        float targetOmega = sim.omegaAt(target, leaf);
-        float targetQAB = sim.qabAt(target, part, leaf);
-        float targetRatio = (sim.pressureAt(target, leaf) + targetQAB) / (targetDensity * targetDensity * targetOmega);
+    float targetDensity = data.density[target];
+    float targetOmega = data.omega[target];
 
-        float partDensity = sim.densityAt(part, leaf);
-        float partOmega = sim.omegaAt(target, leaf);
-        float partQAB = sim.qabAt(part, target, leaf);
-        float partRatio = (sim.pressureAt(part, leaf) + partQAB) / (partDensity * partDensity * partOmega);
+    std::vector<int> neighbours = sim.getNeighbours(target, leaf, true);
+    for (int part: neighbours) {
+        float targetQAB = sim.qabAt(target, part);
+        float targetRatio = (sim.pressureAt(target) + targetQAB) / (targetDensity * targetDensity * targetOmega);
+
+        float partDensity = data.density[part];
+        float partOmega = data.omega[part];
+        float partQAB = sim.qabAt(part, target);
+        float partRatio = (sim.pressureAt(part) + partQAB) / (partDensity * partDensity * partOmega);
 
         Point3f disp = sim.displacementBetween(target, part);
+        Point3f dispNorm = sim.norm(disp);
+        float distance = sim.distBetween(target, part);
         float hTarget = data.xyzh[4 * target + 3], hPart = data.xyzh[4 * part + 3];
 
-        ax += data.m * (targetRatio * kernel.gradientAt(disp.x) / hTarget + partRatio * kernel.gradientAt(disp.x) / hPart);
-        ay += data.m * (targetRatio * kernel.gradientAt(disp.y) / hTarget + partRatio * kernel.gradientAt(disp.y) / hPart);
-        az += data.m * (targetRatio * kernel.gradientAt(disp.z) / hTarget + partRatio * kernel.gradientAt(disp.z) / hPart);
+        float targetGradient = kernel.gradientAt(distance) / (hTarget * hTarget * hTarget * hTarget);
+        float partGradient = kernel.gradientAt(distance) / (hPart * hPart * hPart * hPart);
+
+        ax += data.m * (targetRatio * dispNorm.x * targetGradient + partRatio * dispNorm.x * partGradient);
+        ay += data.m * (targetRatio * dispNorm.y * targetGradient + partRatio * dispNorm.y * partGradient);
+        az += data.m * (targetRatio * dispNorm.z * targetGradient + partRatio * dispNorm.z * partGradient);
     }
 
     return Point3f{ax, ay, az};
@@ -46,22 +91,26 @@ float LeapfrogIntegrator::energyChangeForParticle(int target, TreeNode& leaf) {
     SimData& data = sim.getSimData();
     Kernel& kernel = sim.getKernel();
 
-    float targetPressure = sim.pressureAt(target, leaf);
-    float targetDensity = sim.densityAt(target, leaf);
-    float targetOmega = sim.omegaAt(target, leaf);
+    float targetPressure = sim.pressureAt(target);
+    float targetDensity = data.density[target];
+    float targetOmega = data.omega[target];
 
     float targetRatio = targetPressure / (targetDensity * targetDensity * targetOmega);
     std::vector<int> neighbours = sim.getNeighbours(target, leaf, true);
 
     float uChange = 0;
-    for (int part: leaf.getParticleIndices()) {
+    for (int part: neighbours) {
         Point3f vDiff = sim.velocityDiffBetween(target, part);
         Point3f disp = sim.displacementBetween(target, part);
-        float hTarget = data.xyzh[4 * target + 3];
+        Point3f dispNorm = sim.norm(disp);
+        float distance = sim.distBetween(target, part);
 
-        float xComp = vDiff.x * (kernel.gradientAt(disp.x) / hTarget);
-        float yComp = vDiff.y * (kernel.gradientAt(disp.y) / hTarget);
-        float zComp = vDiff.z * (kernel.gradientAt(disp.z) / hTarget);
+        float hTarget = data.xyzh[4 * target + 3];
+        float gradient = kernel.gradientAt(distance) / (hTarget * hTarget * hTarget * hTarget);
+
+        float xComp = vDiff.x * dispNorm.x * gradient;
+        float yComp = vDiff.y * dispNorm.y * gradient;
+        float zComp = vDiff.z * dispNorm.z * gradient;
 
         uChange += data.m * (xComp + yComp + zComp);
     }
@@ -69,52 +118,47 @@ float LeapfrogIntegrator::energyChangeForParticle(int target, TreeNode& leaf) {
     return uChange * targetRatio;
 }
 
-void LeapfrogIntegrator::step(SimData& data, float timestep) {
-    std::vector<float> accs, energies;
-    int vWidth = 3;
+void LeapfrogIntegrator::computeAccsAndEnergies() {
+    precompute();
+    SimData& data = sim.getSimData();
     std::vector<TreeNode*>& leaves = sim.getLeaves();
 
-    if (data.doesContainEnergy()) {
-        for (TreeNode* leaf : leaves) {
-            for (int i : leaf->getParticleIndices()) {
-                Point3f iAccs = accForParticle(i, *leaf);
-                accs.push_back(iAccs.x);
-                accs.push_back(iAccs.y);
-                accs.push_back(iAccs.z);
-                energies.push_back(energyChangeForParticle(i, *leaf));
-            }
+    for (TreeNode* leaf : leaves) {
+        for (int i : leaf->getParticleIndices()) {
+            Point3f iAccs = accForParticle(i, *leaf);
+            data.accs[3 * i] = iAccs.x;
+            data.accs[3 * i + 1] = iAccs.y;
+            data.accs[3 * i + 2] = iAccs.z;
+            data.energies[i] = energyChangeForParticle(i, *leaf);
         }
-        vWidth = 4;
-    } else {
-        accs.assign(sim.getParticleCount() * 3, 0);
-        energies.assign(sim.getParticleCount(), 0);
+    }
+}
+
+void LeapfrogIntegrator::step(SimData& data, float timestep) {
+    int vWidth = 3;
+
+    if (firstStep) {
+        computeAccsAndEnergies();
+        firstStep = false;
     }
 
     // TODO: Huge code smell here, the cache should be replaced within Simulation
     // as soon as a particle's details changes, not externally like this.
     sim.resetNeighbourCache();
 
-    for (TreeNode* leaf : leaves) {
-        for (int i : leaf->getParticleIndices()) {
-            addToParticle(i, data.vxyzu, vWidth, 0.5, accs, 3, timestep);
-            addToParticle(i, data.xyzh, 4, 1, data.vxyzu, vWidth, timestep);
-            data.vxyzu[i * 4 + 3] += 0.5 * energies[i] * timestep;
-        }
+    for (int i = 0; i < sim.getParticleCount(); i++) {
+        addToParticle(i, data.vxyzu, vWidth, 0.5, data.accs, 3, timestep);
+        addToParticle(i, data.xyzh, 4, 1, data.vxyzu, vWidth, timestep);
+        periodicCorrection(i);
+        data.vxyzu[i * 4 + 3] += 0.5 * data.energies[i] * timestep;
     }
 
     sim.buildTree();
+    computeAccsAndEnergies();
 
-    for (TreeNode* leaf : leaves) {
-        for (int i: leaf->getParticleIndices()) {
-            Point3f newIAccs = accForParticle(i, *leaf);
-            accs[i*3 + 0] = newIAccs.x;
-            accs[i*3 + 1] = newIAccs.y;
-            accs[i*3 + 2] = newIAccs.z;
-            energies[i] = energyChangeForParticle(i, *leaf);
-
-            addToParticle(i, data.vxyzu, vWidth, 0.5, accs, 3, timestep);
-            data.vxyzu[i * 4 + 3] += 0.5 * energies[i] * timestep;
-        }
+    for (int i = 0; i < sim.getParticleCount(); i++) {
+        addToParticle(i, data.vxyzu, vWidth, 0.5, data.accs, 3, timestep);
+        data.vxyzu[i * 4 + 3] += 0.5 * data.energies[i] * timestep;
     }
 
     // TODO: See above.

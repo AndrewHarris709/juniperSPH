@@ -15,9 +15,16 @@ int main(int argc, char* argv[])
 
     std::cout << "Density iteration complete" << std::endl;
 
-    data.stepSimulation();
+    for (int step = 1; step < 100; step++) {
+        std::cout << "Simulation Step " << step << "...";
+        data.stepSimulation();
+        std::cout << " Complete...";
+        data.getSimData().toCSV("./dumps/step_" + std::to_string(step) + ".csv");
+        std::cout << "Saved." << std::endl;
+        data.densityIterate();
+    }
 
-    std::cout << "Simulation Step Complete" << std::endl;
+    std::cout << "Simulation Steps Complete" << std::endl;
 
     // This argument should be verified prior to simulation.
     data.getSimData().toCSV(argv[3]);

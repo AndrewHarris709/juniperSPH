@@ -64,6 +64,11 @@ SimData::SimData(const std::string& filename) {
         }
     }
 
+    density.resize(this->getParticleCount(), 0);
+    omega.resize(this->getParticleCount(), 0);
+    accs.resize(3 * this->getParticleCount(), 0);
+    energies.resize(this->getParticleCount(), 0);
+
     file.close();
 }
 
@@ -75,9 +80,10 @@ void SimData::toCSV(const std::string &filename) {
         std::cerr << "Error writing to file " << filename << std::endl;
     }
 
-    file << "x,y,z,h,vx,vy,vz,u,fx,fy,fz" << std::endl;
+    file << "i,x,y,z,h,vx,vy,vz,u" << std::endl;
 
     for (int i = 0; i < getParticleCount(); i++) {
+        file << i << ",";
         file << xyzh[4*i] << "," << xyzh[4*i+1] << "," << xyzh[4*i+2] << "," << xyzh[4*i+3] << ",";
         file << vxyzu[4*i] << "," << vxyzu[4*i+1] << "," << vxyzu[4*i+2] << "," << vxyzu[4*i+3] << ",";
         if (fxyz.size() > 0) {
