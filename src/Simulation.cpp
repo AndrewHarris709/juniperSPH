@@ -145,6 +145,13 @@ Point3f Simulation::displacementBetween(float x1, float x2, float y1, float y2, 
         dz = (this->zmax - this->zmin) - dz;
     }
 
+    if (x1 > x2)
+        dx *= -1;
+    if (y1 > y2)
+        dy *= -1;
+    if (z1 > z2)
+        dz *= -1;
+
     return {dx, dy, dz};
 }
 
@@ -333,7 +340,7 @@ float Simulation::qabAt(const int partA, const int partB) {
     const float soundSpeed = sqrt(GAMMA * pressureA / densityA);
     const float signalSpeed = 1 * soundSpeed + 2 * abs(losDot);
 
-    return -0.5 * pressureA * signalSpeed * losDot;
+    return -0.5 * densityA * signalSpeed * losDot;
 }
 
 Point3f Simulation::norm(const Point3f p) {

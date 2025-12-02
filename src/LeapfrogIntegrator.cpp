@@ -17,7 +17,7 @@ void addToParticle(int particle, std::vector<float>& data1, int width1, float mu
 void LeapfrogIntegrator::periodicCorrection(int particle) {
     SimData& data = sim.getSimData();
 
-    float x = data.xyzh[particle * 3 + 0], y = data.xyzh[particle * 3 + 1], z = data.xyzh[particle * 3 + 2];
+    float x = data.xyzh[particle * 4 + 0], y = data.xyzh[particle * 4 + 1], z = data.xyzh[particle * 4 + 2];
 
     if (x > sim.xmax) {
         x -= (sim.xmax - sim.xmin);
@@ -37,9 +37,9 @@ void LeapfrogIntegrator::periodicCorrection(int particle) {
         z += (sim.zmax - sim.zmin);
     }
 
-    data.xyzh[particle * 3 + 0] = x;
-    data.xyzh[particle * 3 + 1] = y;
-    data.xyzh[particle * 3 + 2] = z;
+    data.xyzh[particle * 4 + 0] = x;
+    data.xyzh[particle * 4 + 1] = y;
+    data.xyzh[particle * 4 + 2] = z;
 }
 
 void LeapfrogIntegrator::precompute() {
@@ -76,12 +76,12 @@ Point3f LeapfrogIntegrator::accForParticle(int target, TreeNode& leaf) {
         float distance = sim.distBetween(target, part);
         float hTarget = data.xyzh[4 * target + 3], hPart = data.xyzh[4 * part + 3];
 
-        float targetGradient = kernel.gradientAt(distance) / (hTarget * hTarget * hTarget * hTarget);
-        float partGradient = kernel.gradientAt(distance) / (hPart * hPart * hPart * hPart);
+        float targetGradient = kernel.gradientAt(distance / hTarget) / (hTarget * hTarget * hTarget * hTarget);
+        float partGradient = kernel.gradientAt(distance / hPart) / (hPart * hPart * hPart * hPart);
 
-        ax += data.m * (targetRatio * dispNorm.x * targetGradient + partRatio * dispNorm.x * partGradient);
-        ay += data.m * (targetRatio * dispNorm.y * targetGradient + partRatio * dispNorm.y * partGradient);
-        az += data.m * (targetRatio * dispNorm.z * targetGradient + partRatio * dispNorm.z * partGradient);
+        ax -= data.m * (targetRatio * dispNorm.x * targetGradient + partRatio * dispNorm.x * partGradient);
+        ay -= data.m * (targetRatio * dispNorm.y * targetGradient + partRatio * dispNorm.y * partGradient);
+        az -= data.m * (targetRatio * dispNorm.z * targetGradient + partRatio * dispNorm.z * partGradient);
     }
 
     return Point3f{ax, ay, az};
@@ -106,7 +106,7 @@ float LeapfrogIntegrator::energyChangeForParticle(int target, TreeNode& leaf) {
         float distance = sim.distBetween(target, part);
 
         float hTarget = data.xyzh[4 * target + 3];
-        float gradient = kernel.gradientAt(distance) / (hTarget * hTarget * hTarget * hTarget);
+        float gradient = kernel.gradientAt(distance / hTarget) / (hTarget * hTarget * hTarget * hTarget);
 
         float xComp = vDiff.x * dispNorm.x * gradient;
         float yComp = vDiff.y * dispNorm.y * gradient;
@@ -152,6 +152,8 @@ void LeapfrogIntegrator::step(SimData& data, float timestep) {
         periodicCorrection(i);
         data.vxyzu[i * 4 + 3] += 0.5 * data.energies[i] * timestep;
     }
+
+    sim.getSimData().toCSV("first_kick.csv");
 
     sim.buildTree();
     computeAccsAndEnergies();

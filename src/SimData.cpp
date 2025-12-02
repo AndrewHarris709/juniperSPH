@@ -80,12 +80,13 @@ void SimData::toCSV(const std::string &filename) {
         std::cerr << "Error writing to file " << filename << std::endl;
     }
 
-    file << "i,x,y,z,h,vx,vy,vz,u" << std::endl;
+    file << "i,x,y,z,h,vx,vy,vz,u,ax,ay,az" << std::endl;
 
     for (int i = 0; i < getParticleCount(); i++) {
         file << i << ",";
         file << xyzh[4*i] << "," << xyzh[4*i+1] << "," << xyzh[4*i+2] << "," << xyzh[4*i+3] << ",";
         file << vxyzu[4*i] << "," << vxyzu[4*i+1] << "," << vxyzu[4*i+2] << "," << vxyzu[4*i+3] << ",";
+        file << accs[3*i] << "," << accs[3*i+1] << "," << accs[3*i+2] << ",";
         if (fxyz.size() > 0) {
             file << fxyz[3*i] << "," << fxyz[3*i+1] << "," << fxyz[3*i+2];
         }
