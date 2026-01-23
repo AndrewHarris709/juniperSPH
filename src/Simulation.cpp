@@ -5,6 +5,7 @@
 #include "Simulation.h"
 #include "toml.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -40,6 +41,12 @@ void Simulation::useConfig(const std::string& filename) {
     {
         tbl = toml::parse_file(filename);
         this->simData.m = tbl["simconfig"]["mass"].value<float>().value();
+        this->xmin = tbl["simconfig"]["limits"][0][0].value<float>().value();
+        this->xmax = tbl["simconfig"]["limits"][0][1].value<float>().value();
+        this->ymin = tbl["simconfig"]["limits"][1][0].value<float>().value();
+        this->ymax = tbl["simconfig"]["limits"][1][1].value<float>().value();
+        this->zmin = tbl["simconfig"]["limits"][2][0].value<float>().value();
+        this->zmax = tbl["simconfig"]["limits"][2][1].value<float>().value();
     }
     catch (const toml::parse_error& err)
     {
@@ -221,7 +228,7 @@ float Simulation::densityIterationForParticle(int particle, TreeNode& node) {
 
         float hfact = 1.2;
         float density = simData.m * (hfact / newH) * (hfact / newH) * (hfact / newH);
-        float grad = -3 * (newH / density);
+        float grad = -1 * (newH / (3 * density));
 
         float density_sum = 0;
         float omega = 0;
@@ -232,7 +239,7 @@ float Simulation::densityIterationForParticle(int particle, TreeNode& node) {
         omega = 1 - grad * omega / (newH * newH * newH * newH);
 
         oldH = newH;
-        newH = newH - (density_sum - density) / ((-3 * density * omega) / newH);
+        newH = newH - (density - density_sum) / ((-3 * density * omega) / newH);
         iterationCount++;
 
         if (newH > 1.4 * oldH) {
@@ -265,7 +272,7 @@ void Simulation::densityIterate() {
     buildTree();
     std::vector<int> neighbours;
 
-    #pragma omp parallel for if(leaves.size() > 1)
+    //#pragma omp parallel for if(leaves.size() > 1)
     for (std::size_t leafIdx = 0; leafIdx < leaves.size(); leafIdx++) {
         TreeNode* leaf = leaves[leafIdx];
         auto indices = leaf->getParticleIndices();
