@@ -272,7 +272,7 @@ void Simulation::densityIterate() {
     buildTree();
     std::vector<int> neighbours;
 
-    //#pragma omp parallel for if(leaves.size() > 1)
+    #pragma omp parallel for if(leaves.size() > 1)
     for (std::size_t leafIdx = 0; leafIdx < leaves.size(); leafIdx++) {
         TreeNode* leaf = leaves[leafIdx];
         auto indices = leaf->getParticleIndices();
