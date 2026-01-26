@@ -40,5 +40,5 @@ float Kernel::gradientAt(const float q) const {
 }
 
 float Kernel::dWdhAt(const float q) const {
-    return -1.0 * NORM * (3 * this->valueAt(q) - q * this->gradientAt(q));
+    return -1.0 * NORM * (3 * this->valueAt(q) + q * this->gradientAt(q));
 }
